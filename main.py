@@ -19,7 +19,7 @@ from aiogram.types import (
 )
 
 from config import BOT_TOKEN
-from db import init_db, register_master, get_master, get_services
+from db import init_db, register_master, update_master, get_master, get_services
 from db import add_service, update_service, delete_service, get_appointments
 from db import get_today_appointments, get_upcoming_appointments
 from db import book_appointment
@@ -45,7 +45,9 @@ class AddService(StatesGroup):
     price = State()
     duration = State()
 
-class Booking(StatesGroup):
+class EditProfile(StatesGroup):
+    name = State()
+    phone = State()
     service = State()
     date = State()
     time = State()
@@ -399,7 +401,73 @@ async def show_profile(message: types.Message, state: FSMContext):
         f"Всего записей: {len(appointments)}\n"
         f"💰 Заработано: {total_earned}₽\n"
     )
-    await message.answer(text, reply_markup=master_menu())
+    await message.answer(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ Редактировать профиль", callback_data="edit_profile")],
+        ])
+    )
+    await message.answer("Меню:", reply_markup=master_menu())
+
+# --------------- Редактирование профиля ---------------
+
+@dp.callback_query(F.data == "edit_profile")
+async def edit_profile_start(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    master = get_master(callback.from_user.id)
+    if not master:
+        return
+    await state.set_state(EditProfile.name)
+    await callback.message.edit_text(
+        f"✏️ Текущее имя: **{master['name']}**\n\n"
+        "Введи **новое имя** (или отправь «пропустить»):",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_edit_profile")],
+        ])
+    )
+
+@dp.callback_query(F.data == "cancel_edit_profile")
+async def cancel_edit_profile(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer("Редактирование отменено ✖️")
+    await state.clear()
+    await callback.message.edit_text("❌ **Редактирование отменено.**")
+    await callback.message.answer("Меню:", reply_markup=master_menu())
+
+@dp.message(EditProfile.name)
+async def edit_profile_name(message: types.Message, state: FSMContext):
+    name = message.text if message.text.lower() != "пропустить" else None
+    await state.update_data(new_name=name)
+    await state.set_state(EditProfile.phone)
+    master = get_master(message.from_user.id)
+    await message.answer(
+        f"✏️ Текущий телефон: **{master['phone']}**\n\n"
+        "Введи **новый номер телефона** (или отправь «пропустить»):",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_edit_profile")],
+        ])
+    )
+
+@dp.message(EditProfile.phone)
+async def edit_profile_phone(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    master = get_master(message.from_user.id)
+    if not master:
+        await message.answer("Ошибка. Попробуй /start")
+        await state.clear()
+        return
+
+    new_name = data.get("new_name") or master["name"]
+    new_phone = message.text if message.text.lower() != "пропустить" else master["phone"]
+
+    update_master(message.from_user.id, new_name, new_phone)
+    await state.clear()
+
+    await message.answer(
+        f"✅ **Профиль обновлён!**\n\n"
+        f"Имя: {new_name}\n"
+        f"Телефон: {new_phone}",
+        reply_markup=master_menu()
+    )
 
 @dp.message(F.text == "📊 Статистика")
 async def show_stats(message: types.Message, state: FSMContext):

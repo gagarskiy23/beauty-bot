@@ -85,6 +85,13 @@ def get_master(tg_id):
     conn.close()
     return dict(row) if row else None
 
+def update_master(tg_id, name, phone):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE masters SET name=?, phone=? WHERE tg_id=?", (name, phone, tg_id))
+    conn.commit()
+    conn.close()
+
 # ---------- Services ----------
 def add_service(master_id, name, price, duration=60):
     conn = get_db()

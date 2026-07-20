@@ -1,0 +1,9 @@
+services:
+  bot:
+    build: .
+    container_name: beauty-bot
+    restart: always
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+    volumes:
+      - ./bot.db:/app/bot.db

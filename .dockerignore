@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+venv/
+.env
+bot.db
+*.db
+*.db-wal
+*.db-shm
+__pycache__
+*.egg-info/
+dist/
+screenshots/
+gen_screenshots.py
+screenshots-preview.html
+avito-ad.md
+about-text.md
+.venv/

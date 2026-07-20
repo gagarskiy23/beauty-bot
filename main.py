@@ -48,11 +48,17 @@ class AddService(StatesGroup):
 class EditProfile(StatesGroup):
     name = State()
     phone = State()
+
+class Booking(StatesGroup):
     service = State()
     date = State()
     time = State()
     client_name = State()
     phone = State()
+
+# ==================== Global ====================
+
+BOT_USERNAME = None
 
 # ==================== Keyboards ====================
 
@@ -162,7 +168,7 @@ async def my_link(message: types.Message, state: FSMContext):
         await message.answer("Сначала зарегистрируйся: /start")
         return
 
-    link = f"https://t.me/{(await bot.me()).username}?start={message.from_user.id}"
+    link = f"https://t.me/{BOT_USERNAME}?start={message.from_user.id}"
     await message.answer(
         "🔗 **Твоя ссылка для клиентов:**\n\n"
         f"`{link}`\n\n"
@@ -688,8 +694,10 @@ async def fallback(message: types.Message):
 # ==================== Main ====================
 
 async def main():
+    global BOT_USERNAME
     init_db()
     me = await bot.me()
+    BOT_USERNAME = me.username
     print(f"🤖 Beauty Bot запущен!")
     print(f"📱 @{me.username}")
     print(f"🔗 Ссылка для мастеров: https://t.me/{me.username}?start=")

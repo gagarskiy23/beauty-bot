@@ -102,7 +102,13 @@ def get_services(master_id):
     conn.close()
     return [dict(r) for r in rows]
 
-def delete_service(service_id):
+def update_service(service_id, name, price, duration=60):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE services SET name=?, price=?, duration_min=? WHERE id=?",
+                (name, price, duration, service_id))
+    conn.commit()
+    conn.close()
     conn = get_db()
     cur = conn.cursor()
     cur.execute("DELETE FROM services WHERE id = ?", (service_id,))

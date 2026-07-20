@@ -20,7 +20,7 @@ from aiogram.types import (
 
 from config import BOT_TOKEN
 from db import init_db, register_master, get_master, get_services
-from db import add_service, get_appointments
+from db import add_service, update_service, delete_service, get_appointments
 from db import get_today_appointments, get_upcoming_appointments
 from db import book_appointment
 from db import check_subscription, get_subscription, activate_subscription
@@ -153,7 +153,8 @@ async def register_phone(message: types.Message, state: FSMContext):
 # ==================== Master Panel ====================
 
 @dp.message(F.text == "🔗 Моя ссылка")
-async def my_link(message: types.Message):
+async def my_link(message: types.Message, state: FSMContext):
+    await state.clear()
     master = get_master(message.from_user.id)
     if not master:
         await message.answer("Сначала зарегистрируйся: /start")
@@ -168,7 +169,8 @@ async def my_link(message: types.Message):
     )
 
 @dp.message(F.text == "📋 Записи")
-async def show_appointments(message: types.Message):
+async def show_appointments(message: types.Message, state: FSMContext):
+    await state.clear()
     master = get_master(message.from_user.id)
     if not master:
         await message.answer("Сначала зарегистрируйся: /start")
@@ -191,7 +193,8 @@ async def show_appointments(message: types.Message):
     await message.answer(text, reply_markup=master_menu())
 
 @dp.message(F.text == "📅 Сегодня")
-async def show_today(message: types.Message):
+async def show_today(message: types.Message, state: FSMContext):
+    await state.clear()
     master = get_master(message.from_user.id)
     if not master:
         await message.answer("Сначала зарегистрируйся: /start")
@@ -217,6 +220,7 @@ async def show_today(message: types.Message):
 
 @dp.message(F.text == "🛠 Услуги")
 async def show_services(message: types.Message, state: FSMContext):
+    await state.clear()
     master = get_master(message.from_user.id)
     if not master:
         await message.answer("Сначала зарегистрируйся: /start")
@@ -224,44 +228,133 @@ async def show_services(message: types.Message, state: FSMContext):
 
     services = get_services(master["id"])
     text = "🛠 **Твои услуги:**\n\n"
-    if not services:
-        text += "Пока ничего не добавлено.\n"
-    else:
+
+    kb_buttons = []
+    if services:
         for s in services:
             text += f"• {s['name']} — {s['price']}₽ ({s['duration_min']} мин)\n"
+            kb_buttons.append([
+                InlineKeyboardButton(text=f"✏️ {s['name']}", callback_data=f"edit_svc_{s['id']}"),
+                InlineKeyboardButton(text="🗑 Удалить", callback_data=f"del_svc_{s['id']}"),
+            ])
+    else:
+        text += "Пока ничего не добавлено.\n"
+
+    kb_buttons.append([InlineKeyboardButton(text="➕ Добавить услугу", callback_data="add_service")])
 
     await message.answer(
-        text + "\nХочешь добавить?",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="➕ Добавить услугу", callback_data="add_service")],
-        ])
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_buttons)
     )
+
+# --------------- Добавление / Редактирование / Удаление услуг ---------------
 
 @dp.callback_query(F.data == "add_service")
 async def add_service_start(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
-    await callback.message.edit_text("Введи **название услуги** (например: «Маникюр комбинированный»):")
     await state.set_state(AddService.name)
+    await callback.message.edit_text(
+        "Введи **название услуги** (например: «Маникюр комбинированный»):\n\n"
+        "Или нажми «❌ Отмена»",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_add")],
+        ])
+    )
 
+@dp.callback_query(F.data == "cancel_add")
+async def cancel_add_flow(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer("Добавление отменено ✖️")
+    await state.clear()
+    await callback.message.edit_text("❌ **Добавление услуги отменено.**")
+    await callback.message.answer("Твои услуги:", reply_markup=master_menu())
+
+@dp.callback_query(F.data.startswith("edit_svc_"))
+async def edit_service_start(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    service_id = int(callback.data.split("_")[2])
+    await state.update_data(edit_service_id=service_id)
+    await state.set_state(AddService.name)
+    await callback.message.edit_text(
+        "✏️ Введи **новое название** услуги:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_edit")],
+        ])
+    )
+
+@dp.callback_query(F.data == "cancel_edit")
+async def cancel_edit_flow(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer("Редактирование отменено ✖️")
+    await state.clear()
+    await callback.message.edit_text("❌ **Редактирование отменено.**")
+    await callback.message.answer("Твои услуги:", reply_markup=master_menu())
+
+@dp.callback_query(F.data.startswith("del_svc_"))
+async def delete_service_handler(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    service_id = int(callback.data.split("_")[2])
+    master = get_master(callback.from_user.id)
+    if not master:
+        return
+
+    services = get_services(master["id"])
+    svc_name = next((s["name"] for s in services if s["id"] == service_id), "неизвестно")
+
+    delete_service(service_id)
+    await state.clear()
+    await callback.message.edit_text(f"🗑 Услуга «{svc_name}» удалена.")
+
+    remaining = get_services(master["id"])
+    text = "🛠 **Твои услуги:**\n\n"
+    kb = []
+    if remaining:
+        for s in remaining:
+            text += f"• {s['name']} — {s['price']}₽ ({s['duration_min']} мин)\n"
+    else:
+        text += "Пока ничего не добавлено.\n"
+    kb.append([InlineKeyboardButton(text="➕ Добавить услугу", callback_data="add_service")])
+    await callback.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+    await callback.message.answer("Меню:", reply_markup=master_menu())
+
+# Единый FSM-обработчик для всех шагов (добавление + редактирование)
 @dp.message(AddService.name)
-async def add_service_name(message: types.Message, state: FSMContext):
+async def on_service_name(message: types.Message, state: FSMContext):
+    data = await state.get_data()
     await state.update_data(service_name=message.text)
-    await message.answer("Введи **цену** в рублях (только цифры):")
     await state.set_state(AddService.price)
+    mode = "edit" if "edit_service_id" in data else "add"
+    cancel = "cancel_edit" if mode == "edit" else "cancel_add"
+    prefix = "✏️ Введи **новую** " if mode == "edit" else "Введи "
+    await message.answer(
+        f"{prefix}цену** в рублях (только цифры):\n\n"
+        "Или нажми «❌ Отмена»",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=cancel)],
+        ])
+    )
 
 @dp.message(AddService.price)
-async def add_service_price(message: types.Message, state: FSMContext):
+async def on_service_price(message: types.Message, state: FSMContext):
     if not message.text.isdigit():
-        await message.answer("Введи число, например: 1500")
+        await message.answer("❌ Введи число, например: 1500")
         return
+    data = await state.get_data()
     await state.update_data(price=int(message.text))
-    await message.answer("Сколько минут длится услуга? (например: 60)")
     await state.set_state(AddService.duration)
+    mode = "edit" if "edit_service_id" in data else "add"
+    cancel = "cancel_edit" if mode == "edit" else "cancel_add"
+    prefix = "✏️ Введи **новую** " if mode == "edit" else ""
+    await message.answer(
+        f"{prefix}длительность** в минутах (например: 60):\n\n"
+        "Или нажми «❌ Отмена»",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=cancel)],
+        ])
+    )
 
 @dp.message(AddService.duration)
-async def add_service_duration(message: types.Message, state: FSMContext):
+async def on_service_duration(message: types.Message, state: FSMContext):
     if not message.text.isdigit():
-        await message.answer("Введи число, например: 60")
+        await message.answer("❌ Введи число, например: 60")
         return
     data = await state.get_data()
     master = get_master(message.from_user.id)
@@ -270,15 +363,26 @@ async def add_service_duration(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    add_service(master["id"], data["service_name"], data["price"], int(message.text))
-    await state.clear()
-    await message.answer(
-        f"✅ Услуга «{data['service_name']}» — {data['price']}₽ добавлена!",
-        reply_markup=master_menu()
-    )
+    duration = int(message.text)
+
+    if "edit_service_id" in data:
+        update_service(data["edit_service_id"], data["service_name"], data["price"], duration)
+        await state.clear()
+        await message.answer(
+            f"✅ Услуга «{data['service_name']}» обновлена!",
+            reply_markup=master_menu()
+        )
+    else:
+        add_service(master["id"], data["service_name"], data["price"], duration)
+        await state.clear()
+        await message.answer(
+            f"✅ Услуга «{data['service_name']}» — {data['price']}₽ добавлена!",
+            reply_markup=master_menu()
+        )
 
 @dp.message(F.text == "👤 Профиль")
-async def show_profile(message: types.Message):
+async def show_profile(message: types.Message, state: FSMContext):
+    await state.clear()
     master = get_master(message.from_user.id)
     if not master:
         await message.answer("Сначала зарегистрируйся: /start")
@@ -298,7 +402,8 @@ async def show_profile(message: types.Message):
     await message.answer(text, reply_markup=master_menu())
 
 @dp.message(F.text == "📊 Статистика")
-async def show_stats(message: types.Message):
+async def show_stats(message: types.Message, state: FSMContext):
+    await state.clear()
     master = get_master(message.from_user.id)
     if not master:
         await message.answer("Сначала зарегистрируйся: /start")

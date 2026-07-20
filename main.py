@@ -26,9 +26,8 @@ from db import book_appointment
 from db import check_subscription, get_subscription, activate_subscription
 
 PRICES = {
-    "1_month": 100,    # 100 Stars ≈ ~200₽
-    "3_months": 250,   # 250 Stars ≈ ~500₽ (скидка)
-    "forever": 500,    # 500 Stars ≈ ~1000₽
+    "1_month": 300,    # 300 Stars ≈ 500₽
+    "3_months": 750,   # 750 Stars ≈ 1250₽ (скидка ~17%)
 }
 
 logging.basicConfig(level=logging.INFO)
@@ -145,7 +144,7 @@ async def register_phone(message: types.Message, state: FSMContext):
         f"Имя: {data['name']}\n"
         f"Телефон: {phone}\n\n"
         f"🎁 **7 дней бесплатного доступа!**\n"
-        f"Потом подписка — 100 ⭐/мес\n\n"
+        f"Потом подписка — 500₽/мес\n\n"
         f"➡ Добавь услуги через «🛠 Услуги»\n"
         f"➡ Нажми «🔗 Моя ссылка» — кинь её клиентам",
         reply_markup=master_menu()
@@ -336,24 +335,21 @@ async def show_subscription(message: types.Message):
             "Продлить или сменить тариф можно ниже:"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📆 +1 месяц", callback_data="pay_1_month"),
-             InlineKeyboardButton(text="📆 +3 месяца", callback_data="pay_3_months")],
-            [InlineKeyboardButton(text="♾ Навсегда", callback_data="pay_forever")],
+            [InlineKeyboardButton(text="📆 +1 месяц — 300 ⭐", callback_data="pay_1_month"),
+             InlineKeyboardButton(text="📆 +3 месяца — 750 ⭐", callback_data="pay_3_months")],
         ])
     else:
         text = (
             "💳 **Подписка**\n\n"
             "Без подписки бот работает в ознакомительном режиме.\n"
             "Для полноценного использования оформи подписку:\n\n"
-            "📆 **1 месяц** — 100 ⭐\n"
-            "📆 **3 месяца** — 250 ⭐ (скидка 17%)\n"
-            "♾ **Навсегда** — 500 ⭐\n\n"
+            "📆 **1 месяц** — 300 ⭐ (≈500₽)\n"
+            "📆 **3 месяца** — 750 ⭐ (≈1250₽, скидка 17%)\n\n"
             "⭐ Купить Stars: @PremiumBot → «Купить звёзды»"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📆 1 месяц — 100 ⭐", callback_data="pay_1_month"),
-             InlineKeyboardButton(text="📆 3 мес — 250 ⭐", callback_data="pay_3_months")],
-            [InlineKeyboardButton(text="♾ Навсегда — 500 ⭐", callback_data="pay_forever")],
+            [InlineKeyboardButton(text="📆 1 месяц — 300 ⭐", callback_data="pay_1_month"),
+             InlineKeyboardButton(text="📆 3 месяца — 750 ⭐", callback_data="pay_3_months")],
         ])
 
     await message.answer(text, reply_markup=kb)
@@ -364,9 +360,8 @@ async def process_pay(callback: types.CallbackQuery):
     plan = callback.data.replace("pay_", "")
 
     prices_map = {
-        "1_month": (100, "1 месяц", 30),
-        "3_months": (250, "3 месяца", 90),
-        "forever": (500, "Навсегда", 36500),
+        "1_month": (300, "1 месяц", 30),
+        "3_months": (750, "3 месяца", 90),
     }
 
     if plan not in prices_map:
@@ -401,7 +396,7 @@ async def successful_payment(message: types.Message):
     plan = parts[1]
     user_id = int(parts[2])
 
-    days_map = {"month": 30, "months": 90, "forever": 36500}
+    days_map = {"month": 30, "months": 90}
     days = days_map.get(plan, 30)
 
     master = get_master(user_id)

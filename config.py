@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8856041679:AAGvxYSm0_IjjN_-k_iAG1zGIdNhvONfrcw")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("❌ Укажи BOT_TOKEN в переменных окружения!")
 DB_PATH = Path(__file__).parent / "bot.db"

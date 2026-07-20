@@ -109,6 +109,8 @@ def update_service(service_id, name, price, duration=60):
                 (name, price, duration, service_id))
     conn.commit()
     conn.close()
+
+def delete_service(service_id):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("DELETE FROM services WHERE id = ?", (service_id,))
